@@ -325,7 +325,19 @@ public class GenericExternalService extends GreengrassService {
             for (Map.Entry<String, Object> entry : afterMap.entrySet()) {
                 if (key.equals(new CaseInsensitiveString(entry.getKey())) && Objects.nonNull(entry.getValue())) {
                     keyFound = true;
-                    if (!Objects.equals(entry.getValue().toString(), beforeEntry.getValue().toString())) {
+                    Object beforeValue = beforeEntry.getValue();
+                    Object afterValue = entry.getValue();
+                    if (beforeValue instanceof Map && afterValue instanceof Map) {
+                        // Recurse so nested maps (e.g. a Bootstrap Setenv map) are compared by content.
+                        // Comparing their toString() is key-order sensitive: the stored config is a
+                        // case-insensitive TreeMap (Topics.toPOJO) while the incoming config is a HashMap
+                        // (KernelConfigResolver.interpolate), so equal maps with different key order were
+                        // falsely reported as changed, rerunning Bootstrap and restarting on every deployment.
+                        if (!serviceLifecycleBootstrapEquals(beforeValue, afterValue)) {
+                            return false;
+                        }
+                    } else if (!Objects.equals(beforeValue == null ? null : beforeValue.toString(),
+                            afterValue.toString())) {
                         return false;
                     }
                 }
